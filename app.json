@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Notatnik",
+    "slug": "notatnikv2",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "notatnik",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0d1513",
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single"
+    },
+    "plugins": ["expo-router"]
+  }
+}
