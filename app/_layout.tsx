@@ -14,9 +14,50 @@ import {
 } from "@expo-google-fonts/space-grotesk";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React from "react";
-import { View } from "react-native";
+import React, { useEffect } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { LoginScreen } from "@/components/login-screen";
+import { useStore } from "@/lib/store";
 import { colors, fonts } from "@/lib/theme";
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const auth = useStore((s) => s.auth);
+  const init = useStore((s) => s.init);
+  const syncError = useStore((s) => s.syncError);
+  const dismissSyncError = useStore((s) => s.dismissSyncError);
+
+  useEffect(() => {
+    void init();
+  }, [init]);
+
+  if (auth === "checking") {
+    return (
+      <View style={styles.splash}>
+        <ActivityIndicator color={colors.accentBright} size="large" />
+      </View>
+    );
+  }
+  if (auth === "loggedOut") {
+    return <LoginScreen />;
+  }
+  return (
+    <View style={{ flex: 1 }}>
+      {children}
+      {syncError && (
+        <Pressable style={styles.errorBanner} onPress={dismissSyncError}>
+          <Text style={styles.errorBannerText}>{syncError}</Text>
+          <Text style={styles.errorBannerHint}>dotknij, aby zamknąć</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -34,7 +75,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <AuthGate>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -55,6 +96,38 @@ export default function RootLayout() {
         <Stack.Screen name="project/[id]" options={{ title: "Projekt" }} />
         <Stack.Screen name="person-types" options={{ title: "Typy osób" }} />
       </Stack>
-    </>
+    </AuthGate>
   );
 }
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorBanner: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 14,
+    backgroundColor: colors.cardRaised,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  errorBannerText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.danger,
+  },
+  errorBannerHint: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+  },
+});
