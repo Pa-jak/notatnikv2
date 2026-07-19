@@ -635,6 +635,81 @@ function handleTaskMove(PDO $pdo, string $id, array $body): void
 
 // --- PROJECTS ---
 
+function handleProjectCreate(PDO $pdo, array $body): void
+{
+    requireAuth();
+    $id = (string) ($body['id'] ?? '');
+    $name = (string) ($body['name'] ?? '');
+    if ($id === '' || $name === '') {
+        json_error('Brak lub niepoprawne pola (id, name)', 400);
+    }
+
+    $status = (string) ($body['status'] ?? 'active');
+    $importance = (string) ($body['importance'] ?? 'medium');
+    $icon = (string) ($body['icon'] ?? 'folder');
+    if (!in_array($status, ['active', 'paused', 'done'], true)) {
+        json_error('Nieprawidłowy status', 400);
+    }
+    if (!in_array($importance, ['high', 'medium', 'low'], true)) {
+        json_error('Nieprawidłowa ważność', 400);
+    }
+    if (!in_array($icon, ['clock', 'star', 'list', 'folder', 'target'], true)) {
+        json_error('Nieprawidłowa ikona', 400);
+    }
+
+    $tags = $body['tags'] ?? [];
+    if (!is_array($tags)) {
+        $tags = [];
+    }
+    $peopleIds = $body['peopleIds'] ?? [];
+    if (!is_array($peopleIds)) {
+        $peopleIds = [];
+    }
+
+    if (getProject($pdo, $id) !== null) {
+        json_error('Projekt o tym id już istnieje', 409);
+    }
+
+    $now = iso_now();
+    $pdo->beginTransaction();
+    try {
+        $st = $pdo->prepare('INSERT INTO projects (id, name, status, importance, tags_json, blocked_reason, icon, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        $st->execute([
+            $id,
+            $name,
+            $status,
+            $importance,
+            json_encode($tags, JSON_FLAGS_OUT),
+            $body['blockedReason'] ?? null,
+            $icon,
+            $now,
+        ]);
+        $stPP = $pdo->prepare('INSERT INTO project_people (project_id, person_id) VALUES (?, ?)');
+        foreach ($peopleIds as $pid) {
+            $stPP->execute([$id, $pid]);
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    $row = getProject($pdo, $id);
+    json_out(projectRow($pdo, $row), 201);
+}
+
+function handleProjectDelete(PDO $pdo, string $id): void
+{
+    requireAuth();
+    if (getProject($pdo, $id) === null) {
+        json_error('Projekt nie istnieje', 404);
+    }
+    $pdo->prepare('DELETE FROM projects WHERE id = ?')->execute([$id]);
+    json_out(['ok' => true]);
+}
+
 function handleProjectUpdate(PDO $pdo, string $id, array $body): void
 {
     requireAuth();

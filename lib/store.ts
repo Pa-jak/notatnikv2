@@ -65,7 +65,9 @@ interface AppState {
   moveTask: (id: string, column: Column) => void;
   toggleTask: (id: string) => void;
 
+  addProject: (project: Omit<Project, "id" | "createdAt">) => Project;
   updateProject: (id: string, patch: Partial<Omit<Project, "id">>) => void;
+  deleteProject: (id: string) => void;
 }
 
 let initStarted = false;
@@ -318,11 +320,34 @@ export const useStore = create<AppState>((set, get) => {
       get().moveTask(id, target);
     },
 
+    addProject: (project) => {
+      const created: Project = {
+        ...project,
+        id: makeId("prj"),
+        createdAt: nowISO(),
+      };
+      set((s) => ({ projects: [created, ...s.projects] }));
+      sync(() => api.createProject(created).then(applyProject));
+      return created;
+    },
     updateProject: (id, patch) => {
       set((s) => ({
         projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
       }));
       sync(() => api.updateProject(id, patch).then(applyProject));
+    },
+    deleteProject: (id) => {
+      // Lustrzane odbicie kaskad serwera (FK: tasks i notes => projectId SET NULL).
+      set((s) => ({
+        projects: s.projects.filter((p) => p.id !== id),
+        tasks: s.tasks.map((t) =>
+          t.projectId === id ? { ...t, projectId: undefined } : t
+        ),
+        notes: s.notes.map((n) =>
+          n.projectId === id ? { ...n, projectId: undefined } : n
+        ),
+      }));
+      sync(() => api.deleteProject(id));
     },
   };
 });

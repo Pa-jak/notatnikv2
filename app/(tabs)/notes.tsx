@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { NoteCard } from "@/components/note-card";
 import { NoteComposer } from "@/components/note-composer";
 import { OptionPill } from "@/components/pickers";
+import { ProjectForm } from "@/components/project-form";
 import {
   ProjectCardCollapsed,
   ProjectCardExpanded,
@@ -29,7 +30,7 @@ type SortDir = "desc" | "asc";
 
 export default function NotesScreen() {
   const router = useRouter();
-  const { projects, notes, tasks, people, toggleTask } = useStore();
+  const { projects, notes, tasks, people, toggleTask, logout } = useStore();
   const [mode, setMode] = useState<ViewMode>("projects");
   const [expandedId, setExpandedId] = useState<string | null>(
     projects[0]?.id ?? null
@@ -39,6 +40,7 @@ export default function NotesScreen() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [importanceSheet, setImportanceSheet] = useState(false);
   const [composer, setComposer] = useState(false);
+  const [projectForm, setProjectForm] = useState(false);
   const [search, setSearch] = useState("");
 
   const allTags = useMemo(
@@ -133,9 +135,14 @@ export default function NotesScreen() {
         </View>
 
         <View style={styles.titleRow}>
-          <Text style={styles.title}>
-            {mode === "projects" ? "Projekty" : "Wszystkie notatki"}
-          </Text>
+          <View style={styles.titleLeft}>
+            <Text style={styles.title}>
+              {mode === "projects" ? "Projekty" : "Wszystkie notatki"}
+            </Text>
+            <Pressable onPress={logout} hitSlop={10}>
+              <Feather name="log-out" size={18} color={colors.secondary} />
+            </Pressable>
+          </View>
           <Text style={styles.subtitle}>
             {mode === "projects"
               ? `${activeCount} aktywne`
@@ -164,6 +171,13 @@ export default function NotesScreen() {
                 label={sortDir === "desc" ? "Data: najnowsze" : "Data: najstarsze"}
                 active={false}
                 onPress={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+              />
+            </View>
+            <View style={styles.newProjectRow}>
+              <Chip
+                label="Nowy projekt"
+                icon="plus"
+                onPress={() => setProjectForm(true)}
               />
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -275,6 +289,8 @@ export default function NotesScreen() {
 
       <NoteComposer visible={composer} onClose={() => setComposer(false)} />
 
+      <ProjectForm visible={projectForm} onClose={() => setProjectForm(false)} />
+
       <Sheet
         visible={importanceSheet}
         onClose={() => setImportanceSheet(false)}
@@ -339,6 +355,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
+  titleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   title: {
     fontFamily: fonts.heading,
     fontSize: 26,
@@ -354,6 +375,10 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: "row",
     gap: 7,
+    marginBottom: 10,
+  },
+  newProjectRow: {
+    flexDirection: "row",
     marginBottom: 10,
   },
   tagRow: {

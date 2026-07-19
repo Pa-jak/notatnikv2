@@ -269,6 +269,60 @@ async function main() {
       r.ok ? `status=${r.status}` : r.err);
   }
 
+  // 13. Projekty: tworzenie i usuwanie
+  {
+    const projectId = 'prj-smoke-' + Date.now();
+    const firstPersonId = globalThis.__firstPerson;
+    const r = await req('POST', '/projects', {
+      id: projectId,
+      name: 'Smoke projekt',
+      tags: ['test'],
+      peopleIds: [firstPersonId],
+    }, token);
+    check('13a. POST /projects → 201', r.ok && r.status === 201,
+      r.ok ? `status=${r.status} ${r.json && r.json.error ? '(' + r.json.error + ')' : ''}` : r.err);
+    const createdAtOk = r.ok && r.json && typeof r.json.createdAt === 'string';
+    check('13b. utworzony projekt ma createdAt string', createdAtOk,
+      r.json ? `createdAt=${typeof r.json.createdAt}` : '');
+    const peopleIdsOk = r.ok && r.json && Array.isArray(r.json.peopleIds) && r.json.peopleIds.includes(firstPersonId);
+    check('13c. peopleIds zawiera przypisaną osobę', peopleIdsOk,
+      r.json ? JSON.stringify(r.json.peopleIds) : '');
+
+    const s1 = await req('GET', '/state', undefined, token);
+    const foundProject = s1.json && s1.json.projects.find(p => p.id === projectId);
+    check('13d. /state zawiera nowy projekt', !!foundProject);
+
+    const taskId = 't-smoke-prj-' + Date.now();
+    const rt = await req('POST', '/tasks', {
+      id: taskId,
+      title: 'Zadanie projektowe',
+      column: 'todo',
+      projectId,
+    }, token);
+    check('13e. POST /tasks z projectId → 201', rt.ok && rt.status === 201,
+      rt.ok ? `status=${rt.status} ${rt.json && rt.json.error ? '(' + rt.json.error + ')' : ''}` : rt.err);
+
+    const rd = await req('DELETE', '/projects/' + projectId, undefined, token);
+    check('13f. DELETE /projects/{id} → 200', rd.ok && rd.status === 200,
+      rd.ok ? `status=${rd.status}` : rd.err);
+
+    const s2 = await req('GET', '/state', undefined, token);
+    const goneProject = s2.json && s2.json.projects.find(p => p.id === projectId);
+    const taskAfter = s2.json && s2.json.tasks.find(t => t.id === taskId);
+    check('13g. /state: projekt zniknął', !goneProject);
+    check('13h. /state: zadanie ma projectId undefined',
+      !!taskAfter && (taskAfter.projectId === undefined || taskAfter.projectId === null),
+      taskAfter ? `projectId=${taskAfter.projectId}` : 'nie znaleziono zadania');
+
+    const rDelTask = await req('DELETE', '/tasks/' + taskId, undefined, token);
+    check('13i. cleanup zadanie usunięte', rDelTask.ok && rDelTask.status === 200,
+      rDelTask.ok ? `status=${rDelTask.status}` : rDelTask.err);
+
+    const rBad = await req('POST', '/projects', { id: 'prj-bad-' + Date.now() }, token);
+    check('13j. POST /projects bez name → 400', rBad.ok && rBad.status === 400,
+      rBad.ok ? `status=${rBad.status}` : rBad.err);
+  }
+
   finish();
 }
 

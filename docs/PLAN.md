@@ -7,7 +7,7 @@ Status: żywy dokument — odhaczane w trakcie realizacji.
 - [x] WP1 — schemat SQL, warstwa PDO, seed (`7a3de96`)
 - [x] WP2 — REST API PHP + smoke testy (`6b64e77`)
 - [x] WP3 — frontend podpięty pod API, login (`f2d893b`)
-- [ ] WP4 — CRUD projektów (API+UI), wylogowanie
+- [x] WP4 — CRUD projektów (API+UI), wylogowanie
 - [ ] WP5 — offline: cache stanu + kolejka mutacji
 - [ ] WP6 — PWA: manifest, ikony, service worker
 - [ ] WP7 — wdrożenie Hostinger (Git hPanel, MySQL)

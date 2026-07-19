@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -17,6 +17,7 @@ import {
   Avatar,
   IconSquare,
   ImportanceBadge,
+  GhostButton,
   LabeledInput,
   PrimaryButton,
   ProgressBar,
@@ -39,12 +40,20 @@ export default function ProjectScreen() {
     people,
     toggleTask,
     updateProject,
+    deleteProject,
   } = useStore();
   const [editSheet, setEditSheet] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [blockedDraft, setBlockedDraft] = useState("");
   const [taskSheet, setTaskSheet] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>();
   const [composer, setComposer] = useState(false);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const t = setTimeout(() => setConfirmDelete(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmDelete]);
 
   const project = projects.find((p) => p.id === id);
   if (!project) {
@@ -193,6 +202,21 @@ export default function ProjectScreen() {
               <Feather name="chevron-right" size={16} color={colors.faint} />
             </Pressable>
           ))}
+        </View>
+        <View style={{ marginTop: 8 }}>
+          <GhostButton
+            label={confirmDelete ? "Na pewno usunąć?" : "Usuń projekt"}
+            onPress={() => {
+              if (confirmDelete) {
+                deleteProject(project.id);
+                router.back();
+              } else {
+                setConfirmDelete(true);
+              }
+            }}
+            danger
+            icon="trash-2"
+          />
         </View>
         <View style={{ height: 40 }} />
       </ScrollView>

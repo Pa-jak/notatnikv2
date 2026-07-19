@@ -195,11 +195,21 @@ try {
         handleTaskMove($pdo, urldecode($segments[1]), json_in());
     }
 
+    // /projects
+    if ($path === '/projects' && $method === 'POST') {
+        handleProjectCreate($pdo, json_in());
+    }
+    if ($path === '/projects') {
+        json_error('Metoda niedozwolona', 405);
+    }
+
     // /projects/{id}
     if (count($segments) === 2 && $segments[0] === 'projects') {
         $id = urldecode($segments[1]);
         if ($method === 'PUT') {
             handleProjectUpdate($pdo, $id, json_in());
+        } elseif ($method === 'DELETE') {
+            handleProjectDelete($pdo, $id);
         } else {
             json_error('Metoda niedozwolona', 405);
         }

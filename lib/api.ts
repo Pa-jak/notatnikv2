@@ -154,6 +154,8 @@ export const api = {
   moveTask: (id: string, column: Column) =>
     call<Task>("POST", `/tasks/${enc(id)}/move`, { column }),
 
+  createProject: (project: Project) => call<Project>("POST", "/projects", project),
   updateProject: (id: string, patch: object) =>
     call<Project>("PUT", `/projects/${enc(id)}`, patchForApi(patch)),
+  deleteProject: (id: string) => call<{ ok: true }>("DELETE", `/projects/${enc(id)}`),
 };
