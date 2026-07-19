@@ -5,3 +5,5 @@ web-build/
 expo-env.d.ts
 *.log
 .DS_Store
+api/config.php
+api/data.sqlite
