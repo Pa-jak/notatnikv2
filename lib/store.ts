@@ -1,5 +1,13 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { api, ApiError, clearStoredToken, loadStoredToken } from "./api";
+import { api, ApiError, clearStoredToken, loadStoredToken, ops, request } from "./api";
+import type { MutationOp } from "./api";
+import {
+  clearQueue,
+  enqueue,
+  initQueue,
+  pendingCount,
+} from "./mutation-queue";
 import type {
   Column,
   FieldDef,
@@ -23,9 +31,18 @@ function nowISO(): string {
 
 export type AuthStatus = "checking" | "loggedOut" | "loggedIn";
 
+interface StateCache {
+  personTypes: PersonType[];
+  people: Person[];
+  notes: Note[];
+  tasks: Task[];
+  projects: Project[];
+}
+
 interface AppState {
   auth: AuthStatus;
   syncError: string | null;
+  pendingCount: number;
 
   personTypes: PersonType[];
   people: Person[];
@@ -70,27 +87,36 @@ interface AppState {
   deleteProject: (id: string) => void;
 }
 
+const STATE_CACHE_KEY = "notatnik.stateCache";
+
 let initStarted = false;
 
-export const useStore = create<AppState>((set, get) => {
-  // Mutacje są optymistyczne: stan lokalny zmienia się od razu, żądanie
-  // leci w tle. 401 → wylogowanie; inny błąd → komunikat + refresh(),
-  // który przywraca stan zgodny z serwerem.
-  function sync(run: () => Promise<unknown>): void {
-    run().catch((e: unknown) => {
-      if (e instanceof ApiError && e.status === 401) {
-        void clearStoredToken();
-        set({ auth: "loggedOut" });
-        return;
-      }
-      set({
-        syncError:
-          e instanceof ApiError ? e.message : "Błąd synchronizacji z serwerem",
-      });
-      void get().refresh();
-    });
-  }
+function stateCacheFromState(s: AppState): StateCache {
+  return {
+    personTypes: s.personTypes,
+    people: s.people,
+    notes: s.notes,
+    tasks: s.tasks,
+    projects: s.projects,
+  };
+}
 
+async function saveStateCache(snapshot: StateCache): Promise<void> {
+  await AsyncStorage.setItem(STATE_CACHE_KEY, JSON.stringify(snapshot));
+}
+
+async function loadStateCache(): Promise<StateCache | null> {
+  const raw = await AsyncStorage.getItem(STATE_CACHE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as StateCache;
+  } catch {
+    return null;
+  }
+}
+
+
+export const useStore = create<AppState>((set, get) => {
   // Po odpowiedzi serwera podmieniamy encję (serwerowe znaczniki czasu itp.).
   const applyNote = (n: Note) =>
     set((s) => ({ notes: s.notes.map((x) => (x.id === n.id ? n : x)) }));
@@ -105,9 +131,43 @@ export const useStore = create<AppState>((set, get) => {
   const applyProject = (p: Project) =>
     set((s) => ({ projects: s.projects.map((x) => (x.id === p.id ? p : x)) }));
 
+  async function sync<T>(
+    op: MutationOp,
+    apply?: (res: T) => void
+  ): Promise<void> {
+    // FIFO: dopóki kolejka zawiera wcześniejsze mutacje, nowe też do niej trafiają.
+    if (pendingCount() > 0) {
+      await enqueue(op);
+      return;
+    }
+
+    try {
+      const res = await request<T>(op.method, op.path, op.body);
+      apply?.(res);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 0) {
+          await enqueue(op);
+          return;
+        }
+        if (e.status === 401) {
+          await clearStoredToken();
+          set({ auth: "loggedOut" });
+          return;
+        }
+      }
+      set({
+        syncError:
+          e instanceof ApiError ? e.message : "Błąd synchronizacji z serwerem",
+      });
+      void get().refresh();
+    }
+  }
+
   return {
     auth: "checking",
     syncError: null,
+    pendingCount: 0,
 
     personTypes: [],
     people: [],
@@ -118,24 +178,44 @@ export const useStore = create<AppState>((set, get) => {
     init: async () => {
       if (initStarted) return;
       initStarted = true;
+
       const hasToken = await loadStoredToken();
       if (!hasToken) {
         set({ auth: "loggedOut" });
         return;
       }
-      try {
-        const snap = await api.state();
-        set({ ...snap, auth: "loggedIn" });
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 401) {
-          await clearStoredToken();
+
+      await initQueue({
+        onCountChange: (count) => set({ pendingCount: count }),
+        onFlushed: (executedAny) => {
+          if (executedAny) void get().refresh();
+        },
+        onAuthError: () => {
+          void clearStoredToken();
           set({ auth: "loggedOut" });
-        } else {
-          set({
-            auth: "loggedOut",
-            syncError:
-              e instanceof ApiError ? e.message : "Nie udało się pobrać danych",
-          });
+        },
+      });
+
+      const cached = await loadStateCache();
+      if (cached) {
+        set({ ...cached, auth: "loggedIn", syncError: null });
+        void get().refresh();
+      } else {
+        try {
+          const snap = await api.state();
+          await saveStateCache(snap);
+          set({ ...snap, auth: "loggedIn", syncError: null });
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 401) {
+            await clearStoredToken();
+            set({ auth: "loggedOut" });
+          } else {
+            set({
+              auth: "loggedOut",
+              syncError:
+                e instanceof ApiError ? e.message : "Nie udało się pobrać danych",
+            });
+          }
         }
       }
     },
@@ -143,11 +223,14 @@ export const useStore = create<AppState>((set, get) => {
     login: async (password) => {
       await api.login(password); // rzuca ApiError przy złym haśle
       const snap = await api.state();
+      await saveStateCache(snap);
       set({ ...snap, auth: "loggedIn", syncError: null });
     },
 
     logout: async () => {
       await clearStoredToken();
+      await clearQueue();
+      await AsyncStorage.removeItem(STATE_CACHE_KEY);
       set({
         auth: "loggedOut",
         personTypes: [],
@@ -155,12 +238,16 @@ export const useStore = create<AppState>((set, get) => {
         notes: [],
         tasks: [],
         projects: [],
+        pendingCount: 0,
       });
     },
 
     refresh: async () => {
+      // Nie nadpisujemy stanu, dopóki serwer nie zna zakolejkowanych zmian.
+      if (pendingCount() > 0) return;
       try {
         const snap = await api.state();
+        await saveStateCache(snap);
         set({ ...snap });
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) {
@@ -180,7 +267,7 @@ export const useStore = create<AppState>((set, get) => {
         updatedAt: nowISO(),
       };
       set((s) => ({ notes: [created, ...s.notes] }));
-      sync(() => api.createNote(created).then(applyNote));
+      void sync(ops.createNote(created), applyNote);
       return created;
     },
     updateNote: (id, patch) => {
@@ -189,24 +276,24 @@ export const useStore = create<AppState>((set, get) => {
           n.id === id ? { ...n, ...patch, updatedAt: nowISO() } : n
         ),
       }));
-      sync(() => api.updateNote(id, patch).then(applyNote));
+      void sync(ops.updateNote(id, patch), applyNote);
     },
     deleteNote: (id) => {
       set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }));
-      sync(() => api.deleteNote(id));
+      void sync(ops.deleteNote(id));
     },
 
     addPerson: (person) => {
       const created: Person = { ...person, id: makeId("p") };
       set((s) => ({ people: [...s.people, created] }));
-      sync(() => api.createPerson(created).then(applyPerson));
+      void sync(ops.createPerson(created), applyPerson);
       return created;
     },
     updatePerson: (id, patch) => {
       set((s) => ({
         people: s.people.map((p) => (p.id === id ? { ...p, ...patch } : p)),
       }));
-      sync(() => api.updatePerson(id, patch).then(applyPerson));
+      void sync(ops.updatePerson(id, patch), applyPerson);
     },
     deletePerson: (id) => {
       // Lustrzane odbicie kaskad serwera (FK: mentions, tasks, project_people).
@@ -226,13 +313,13 @@ export const useStore = create<AppState>((set, get) => {
             : prj
         ),
       }));
-      sync(() => api.deletePerson(id));
+      void sync(ops.deletePerson(id));
     },
 
     addPersonType: (name, color) => {
       const created: PersonType = { id: makeId("pt"), name, color, fields: [] };
       set((s) => ({ personTypes: [...s.personTypes, created] }));
-      sync(() => api.createPersonType(created).then(applyPersonType));
+      void sync(ops.createPersonType(created), applyPersonType);
       return created;
     },
     updatePersonType: (id, patch) => {
@@ -241,7 +328,7 @@ export const useStore = create<AppState>((set, get) => {
           t.id === id ? { ...t, ...patch } : t
         ),
       }));
-      sync(() => api.updatePersonType(id, patch).then(applyPersonType));
+      void sync(ops.updatePersonType(id, patch), applyPersonType);
     },
     deletePersonType: (id) => {
       set((s) => {
@@ -254,7 +341,7 @@ export const useStore = create<AppState>((set, get) => {
         };
       });
       // Serwer sam wybiera typ zastępczy — refresh dociąga jego wybór.
-      sync(() => api.deletePersonType(id).then(() => get().refresh()));
+      void sync(ops.deletePersonType(id), () => void get().refresh());
     },
     addField: (typeId, field) => {
       const created: FieldDef = { ...field, id: makeId("f") };
@@ -263,7 +350,7 @@ export const useStore = create<AppState>((set, get) => {
           t.id === typeId ? { ...t, fields: [...t.fields, created] } : t
         ),
       }));
-      sync(() => api.addField(typeId, created).then(applyPersonType));
+      void sync(ops.addField(typeId, created), applyPersonType);
     },
     removeField: (typeId, fieldId) => {
       set((s) => ({
@@ -273,7 +360,7 @@ export const useStore = create<AppState>((set, get) => {
             : t
         ),
       }));
-      sync(() => api.removeField(typeId, fieldId).then(applyPersonType));
+      void sync(ops.removeField(typeId, fieldId), applyPersonType);
     },
 
     addTask: (task) => {
@@ -286,18 +373,18 @@ export const useStore = create<AppState>((set, get) => {
           ),
         ],
       }));
-      sync(() => api.createTask(created).then(applyTask));
+      void sync(ops.createTask(created), applyTask);
       return created;
     },
     updateTask: (id, patch) => {
       set((s) => ({
         tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
       }));
-      sync(() => api.updateTask(id, patch).then(applyTask));
+      void sync(ops.updateTask(id, patch), applyTask);
     },
     deleteTask: (id) => {
       set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
-      sync(() => api.deleteTask(id));
+      void sync(ops.deleteTask(id));
     },
     moveTask: (id, column) => {
       set((s) => {
@@ -311,7 +398,7 @@ export const useStore = create<AppState>((set, get) => {
           ),
         };
       });
-      sync(() => api.moveTask(id, column).then(applyTask));
+      void sync(ops.moveTask(id, column), applyTask);
     },
     toggleTask: (id) => {
       const current = get().tasks.find((t) => t.id === id);
@@ -327,14 +414,14 @@ export const useStore = create<AppState>((set, get) => {
         createdAt: nowISO(),
       };
       set((s) => ({ projects: [created, ...s.projects] }));
-      sync(() => api.createProject(created).then(applyProject));
+      void sync(ops.createProject(created), applyProject);
       return created;
     },
     updateProject: (id, patch) => {
       set((s) => ({
         projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
       }));
-      sync(() => api.updateProject(id, patch).then(applyProject));
+      void sync(ops.updateProject(id, patch), applyProject);
     },
     deleteProject: (id) => {
       // Lustrzane odbicie kaskad serwera (FK: tasks i notes => projectId SET NULL).
@@ -347,7 +434,16 @@ export const useStore = create<AppState>((set, get) => {
           n.projectId === id ? { ...n, projectId: undefined } : n
         ),
       }));
-      sync(() => api.deleteProject(id));
+      void sync(ops.deleteProject(id));
     },
   };
+});
+
+// Debounce 500 ms: zapisujemy aktualny stan do cache po każdej zmianie.
+let cacheTimer: ReturnType<typeof setTimeout> | null = null;
+useStore.subscribe((s) => {
+  if (cacheTimer) clearTimeout(cacheTimer);
+  cacheTimer = setTimeout(() => {
+    void saveStateCache(stateCacheFromState(s));
+  }, 500);
 });

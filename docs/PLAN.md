@@ -8,7 +8,7 @@ Status: żywy dokument — odhaczane w trakcie realizacji.
 - [x] WP2 — REST API PHP + smoke testy (`6b64e77`)
 - [x] WP3 — frontend podpięty pod API, login (`f2d893b`)
 - [x] WP4 — CRUD projektów (API+UI), wylogowanie
-- [ ] WP5 — offline: cache stanu + kolejka mutacji
+- [x] WP5 — offline: cache stanu + kolejka mutacji
 - [ ] WP6 — PWA: manifest, ikony, service worker
 - [ ] WP7 — wdrożenie Hostinger (Git hPanel, MySQL)
 - [ ] WP8 — weryfikacja E2E na produkcji

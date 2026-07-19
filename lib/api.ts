@@ -30,6 +30,12 @@ export interface StateSnapshot {
   projects: Project[];
 }
 
+export interface MutationOp {
+  method: string;
+  path: string;
+  body?: unknown;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -71,7 +77,7 @@ function stripNulls(value: unknown): unknown {
  * tylko klucze obecne w ciele — jawne undefined w patchu zamieniamy na null,
  * żeby dało się wyczyścić pole (np. linkUrl przy zmianie rodzaju notatki).
  */
-function patchForApi(patch: object): Record<string, unknown> {
+export function patchForApi(patch: object): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     out[k] = v === undefined ? null : v;
@@ -79,7 +85,7 @@ function patchForApi(patch: object): Record<string, unknown> {
   return out;
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -113,49 +119,103 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 const enc = encodeURIComponent;
 
+export const ops = {
+  createNote: (note: Note): MutationOp => ({
+    method: "POST",
+    path: "/notes",
+    body: note,
+  }),
+  updateNote: (id: string, patch: object): MutationOp => ({
+    method: "PUT",
+    path: `/notes/${enc(id)}`,
+    body: patchForApi(patch),
+  }),
+  deleteNote: (id: string): MutationOp => ({
+    method: "DELETE",
+    path: `/notes/${enc(id)}`,
+  }),
+
+  createPerson: (person: Person): MutationOp => ({
+    method: "POST",
+    path: "/people",
+    body: person,
+  }),
+  updatePerson: (id: string, patch: object): MutationOp => ({
+    method: "PUT",
+    path: `/people/${enc(id)}`,
+    body: patchForApi(patch),
+  }),
+  deletePerson: (id: string): MutationOp => ({
+    method: "DELETE",
+    path: `/people/${enc(id)}`,
+  }),
+
+  createPersonType: (type: PersonType): MutationOp => ({
+    method: "POST",
+    path: "/person-types",
+    body: type,
+  }),
+  updatePersonType: (id: string, patch: object): MutationOp => ({
+    method: "PUT",
+    path: `/person-types/${enc(id)}`,
+    body: patchForApi(patch),
+  }),
+  deletePersonType: (id: string): MutationOp => ({
+    method: "DELETE",
+    path: `/person-types/${enc(id)}`,
+  }),
+  addField: (typeId: string, field: FieldDef): MutationOp => ({
+    method: "POST",
+    path: `/person-types/${enc(typeId)}/fields`,
+    body: field,
+  }),
+  removeField: (typeId: string, fieldId: string): MutationOp => ({
+    method: "DELETE",
+    path: `/person-types/${enc(typeId)}/fields/${enc(fieldId)}`,
+  }),
+
+  createTask: (task: Task): MutationOp => ({
+    method: "POST",
+    path: "/tasks",
+    body: task,
+  }),
+  updateTask: (id: string, patch: object): MutationOp => ({
+    method: "PUT",
+    path: `/tasks/${enc(id)}`,
+    body: patchForApi(patch),
+  }),
+  deleteTask: (id: string): MutationOp => ({
+    method: "DELETE",
+    path: `/tasks/${enc(id)}`,
+  }),
+  moveTask: (id: string, column: Column): MutationOp => ({
+    method: "POST",
+    path: `/tasks/${enc(id)}/move`,
+    body: { column },
+  }),
+
+  createProject: (project: Project): MutationOp => ({
+    method: "POST",
+    path: "/projects",
+    body: project,
+  }),
+  updateProject: (id: string, patch: object): MutationOp => ({
+    method: "PUT",
+    path: `/projects/${enc(id)}`,
+    body: patchForApi(patch),
+  }),
+  deleteProject: (id: string): MutationOp => ({
+    method: "DELETE",
+    path: `/projects/${enc(id)}`,
+  }),
+};
+
 export const api = {
   async login(password: string): Promise<void> {
-    const r = await call<{ token: string }>("POST", "/login", { password });
+    const r = await request<{ token: string }>("POST", "/login", { password });
     token = r.token;
     await AsyncStorage.setItem(TOKEN_KEY, r.token);
   },
 
-  state: () => call<StateSnapshot>("GET", "/state"),
-
-  createNote: (note: Note) => call<Note>("POST", "/notes", note),
-  updateNote: (id: string, patch: object) =>
-    call<Note>("PUT", `/notes/${enc(id)}`, patchForApi(patch)),
-  deleteNote: (id: string) => call<{ ok: true }>("DELETE", `/notes/${enc(id)}`),
-
-  createPerson: (person: Person) => call<Person>("POST", "/people", person),
-  updatePerson: (id: string, patch: object) =>
-    call<Person>("PUT", `/people/${enc(id)}`, patchForApi(patch)),
-  deletePerson: (id: string) =>
-    call<{ ok: true }>("DELETE", `/people/${enc(id)}`),
-
-  createPersonType: (type: PersonType) =>
-    call<PersonType>("POST", "/person-types", type),
-  updatePersonType: (id: string, patch: object) =>
-    call<PersonType>("PUT", `/person-types/${enc(id)}`, patchForApi(patch)),
-  deletePersonType: (id: string) =>
-    call<{ ok: true }>("DELETE", `/person-types/${enc(id)}`),
-  addField: (typeId: string, field: FieldDef) =>
-    call<PersonType>("POST", `/person-types/${enc(typeId)}/fields`, field),
-  removeField: (typeId: string, fieldId: string) =>
-    call<PersonType>(
-      "DELETE",
-      `/person-types/${enc(typeId)}/fields/${enc(fieldId)}`
-    ),
-
-  createTask: (task: Task) => call<Task>("POST", "/tasks", task),
-  updateTask: (id: string, patch: object) =>
-    call<Task>("PUT", `/tasks/${enc(id)}`, patchForApi(patch)),
-  deleteTask: (id: string) => call<{ ok: true }>("DELETE", `/tasks/${enc(id)}`),
-  moveTask: (id: string, column: Column) =>
-    call<Task>("POST", `/tasks/${enc(id)}/move`, { column }),
-
-  createProject: (project: Project) => call<Project>("POST", "/projects", project),
-  updateProject: (id: string, patch: object) =>
-    call<Project>("PUT", `/projects/${enc(id)}`, patchForApi(patch)),
-  deleteProject: (id: string) => call<{ ok: true }>("DELETE", `/projects/${enc(id)}`),
+  state: () => request<StateSnapshot>("GET", "/state"),
 };

@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { LoginScreen } from "@/components/login-screen";
+import { plural } from "@/components/project-card";
 import { useStore } from "@/lib/store";
 import { colors, fonts } from "@/lib/theme";
 
@@ -31,6 +32,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const init = useStore((s) => s.init);
   const syncError = useStore((s) => s.syncError);
   const dismissSyncError = useStore((s) => s.dismissSyncError);
+  const pendingCount = useStore((s) => s.pendingCount);
 
   useEffect(() => {
     void init();
@@ -49,6 +51,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <View style={{ flex: 1 }}>
       {children}
+      {pendingCount > 0 && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
+            Offline — {pendingCount} {plural(pendingCount, "zmiana", "zmiany", "zmian")} czeka na synchronizację
+          </Text>
+        </View>
+      )}
       {syncError && (
         <Pressable style={styles.errorBanner} onPress={dismissSyncError}>
           <Text style={styles.errorBannerText}>{syncError}</Text>
@@ -106,6 +115,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     alignItems: "center",
     justifyContent: "center",
+  },
+  offlineBanner: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    top: 14,
+    backgroundColor: colors.cardRaised,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    zIndex: 10,
+  },
+  offlineBannerText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.text,
   },
   errorBanner: {
     position: "absolute",
