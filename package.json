@@ -6,6 +6,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "web": "expo start --web",
+    "build:web": "node scripts/build-web.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

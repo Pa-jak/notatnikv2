@@ -9,7 +9,7 @@ Status: żywy dokument — odhaczane w trakcie realizacji.
 - [x] WP3 — frontend podpięty pod API, login (`f2d893b`)
 - [x] WP4 — CRUD projektów (API+UI), wylogowanie
 - [x] WP5 — offline: cache stanu + kolejka mutacji
-- [ ] WP6 — PWA: manifest, ikony, service worker
+- [x] WP6 — PWA: manifest, ikony, service worker
 - [ ] WP7 — wdrożenie Hostinger (Git hPanel, MySQL)
 - [ ] WP8 — weryfikacja E2E na produkcji
 
