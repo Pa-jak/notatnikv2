@@ -1,0 +1,33 @@
+# Rootowy plik .htaccess dla public_html na Hostingerze.
+# Serwuje zbudowaną PWA z dist/ oraz przekazuje żądania /api/* do api/index.php.
+
+RewriteEngine On
+
+# --- Przekierowanie HTTP -> HTTPS (z wyjątkiem localhost) ---
+RewriteCond %{HTTP_HOST} !^localhost [NC]
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301,QSA]
+
+# --- Nie ingerujemy w żądania /api/; obsłuży je api/.htaccess ---
+RewriteRule ^api/ - [L]
+
+# --- SPA fallback: nieistniejące pliki/katalogi -> index.html ---
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ /index.html [L]
+
+# --- MIME dla manifestu PWA ---
+AddType application/manifest+json .webmanifest
+
+# --- Nagłówki cache ---
+<IfModule mod_headers.c>
+    # Zasoby z hashem: roczny cache
+    SetEnvIf Request_URI "^/_expo/" longcache=1
+    SetEnvIf Request_URI "^/assets/" longcache=1
+    Header set Cache-Control "public, max-age=31536000, immutable" env=longcache
+
+    # Entry HTML i service worker: brak cache
+    <FilesMatch "^(index\.html|sw\.js)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
