@@ -10,15 +10,16 @@ import type {
 } from "./types";
 
 /**
- * Klient REST API (api/index.php). Adres bazowy z EXPO_PUBLIC_API_URL,
- * w dev: `php -S localhost:8080 index.php` w katalogu api/.
+ * Klient REST API (api/index.php). Adres bazowy z EXPO_PUBLIC_API_URL;
+ * bez tej zmiennej: w dev `http://localhost:8080` (php -S w katalogu api/),
+ * w buildzie produkcyjnym względne `/api` (ta sama domena co PWA).
  * Uwaga: w Expo Go na telefonie localhost nie zadziała — ustaw adres IP
  * komputera w sieci lokalnej (np. EXPO_PUBLIC_API_URL=http://192.168.0.10:8080).
  */
-const BASE = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8080").replace(
-  /\/+$/,
-  ""
-);
+const BASE = (
+  process.env.EXPO_PUBLIC_API_URL ??
+  (typeof __DEV__ !== "undefined" && __DEV__ ? "http://localhost:8080" : "/api")
+).replace(/\/+$/, "");
 
 const TOKEN_KEY = "notatnik.apiToken";
 

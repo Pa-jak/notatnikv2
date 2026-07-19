@@ -41,12 +41,18 @@ function main() {
   // -----------------------------------------------------------
   // 1. Eksport aplikacji Expo do katalogu dist/.
   // -----------------------------------------------------------
-  console.log("Krok 1/5: npx expo export --platform web");
-  const expoResult = spawnSync("npx", ["expo", "export", "--platform", "web"], {
-    cwd: projectRoot,
-    stdio: "inherit",
-    shell: true,
-  });
+  // --clear: bez cache Metro — build musi być deterministyczny (inaczej
+  // zmiany env EXPO_PUBLIC_* mogłyby nie trafić do bundla).
+  console.log("Krok 1/5: npx expo export --platform web --clear");
+  const expoResult = spawnSync(
+    "npx",
+    ["expo", "export", "--platform", "web", "--clear"],
+    {
+      cwd: projectRoot,
+      stdio: "inherit",
+      shell: true,
+    }
+  );
 
   if (expoResult.status !== 0) {
     throw new Error(`npx expo export zakończyło się kodem ${expoResult.status ?? expoResult.error}`);

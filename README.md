@@ -46,6 +46,16 @@ Przy serwowaniu API spod Apache (np. hosting współdzielony) wystarczy
 wgrać katalog `api/` — `api/.htaccess` kieruje żądania do `index.php`,
 a `dev_cors_origin` w `config.php` ustawiony na `''` wyłącza nagłówki CORS.
 
+## Wdrożenie
+
+Kompletny opis wdrożenia na Hostingerze (Git w hPanel + MySQL) znajdziesz
+w `docs/DEPLOY.md`. Lokalnie wygeneruj i wypchnij gotowe artefakty na branch
+`deploy`:
+
+```bash
+npm run deploy
+```
+
 ## Decyzje projektowe (rozszerzenia względem SPEC)
 
 - **Projekty** są bytem pierwszoplanowym (ekran 1c handoffu): status,

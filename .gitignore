@@ -2,6 +2,7 @@ node_modules/
 .expo/
 dist/
 web-build/
+.deploy/
 expo-env.d.ts
 *.log
 .DS_Store

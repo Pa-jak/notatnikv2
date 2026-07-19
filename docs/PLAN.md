@@ -10,7 +10,7 @@ Status: żywy dokument — odhaczane w trakcie realizacji.
 - [x] WP4 — CRUD projektów (API+UI), wylogowanie
 - [x] WP5 — offline: cache stanu + kolejka mutacji
 - [x] WP6 — PWA: manifest, ikony, service worker
-- [ ] WP7 — wdrożenie Hostinger (Git hPanel, MySQL)
+- [x] WP7 — wdrożenie Hostinger (Git hPanel, MySQL) — narzędzia gotowe, branch `deploy` opublikowany; kroki w hPanel po stronie użytkownika (docs/DEPLOY.md)
 - [ ] WP8 — weryfikacja E2E na produkcji
 
 ## Kontekst
